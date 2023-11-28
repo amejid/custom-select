@@ -1,50 +1,64 @@
-import { useEffect, useState } from "react";
-import "./App.css";
-import { getSectors } from "./services/apiSectors.js";
+import { useEffect, useState } from 'react';
+import './App.css';
+import { getSectors } from './services/apiSectors.js';
 
 function App() {
   const [sectors, setSectors] = useState([]);
+  const [selectedOptions, setSelectedOptions] = useState([]);
 
   useEffect(() => {
     const handleFetch = async () => {
-      const { sectors } = await getSectors();
+      const { sectors: nestedSectors } = await getSectors();
 
-      function sortDataByParent(data) {
-        const sortedData = [];
-        const idToIndex = {};
-
-        // Build a dictionary to map IDs to their index in the array
-        data.forEach((item, index) => {
-          idToIndex[item.id] = index;
-        });
-
-        // Iterate through the data and insert items into the sorted array
-        data.forEach((item) => {
-          sortedData.push(item);
-          if (
-            item.parent !== null &&
-            Object.prototype.hasOwnProperty.call(idToIndex, item.parent)
-          ) {
-            const parentIndex = idToIndex[item.parent];
-            sortedData.splice(parentIndex + 1, 0, item);
-          }
-        });
-
-        return sortedData;
-      }
-
-      const sortedData = sortDataByParent(sectors);
-
-      setSectors(sortedData);
+      setSectors(nestedSectors);
     };
 
     handleFetch();
   }, []);
 
+  const flattenNestedData = (data) => {
+    let flattenedData = [];
+
+    const flatten = (item, level) => {
+      flattenedData.push({
+        key: item.id,
+        value: item.value,
+        description: item.description,
+        disabled: item.children.length > 0,
+        level: level,
+      });
+
+      if (item.children && item.children.length > 0) {
+        item.children.forEach((child) => flatten(child, level + 1));
+      }
+    };
+
+    data.forEach((d) => flatten(d, 0));
+
+    return flattenedData;
+  };
+
+  const flattenedData = flattenNestedData(sectors);
+
+  const handleSelectChange = (event) => {
+    const selectedValues = Array.from(
+      event.target.selectedOptions,
+      (option) => option.value
+    );
+    setSelectedOptions(selectedValues);
+  };
+
+  console.log(selectedOptions);
+
   return (
-    <select>
-      {sectors.map((sector) => (
-        <option key={sector.id} value={sector.value}>
+    <select multiple size={10} onChange={handleSelectChange}>
+      {flattenedData.map((sector) => (
+        <option
+          key={sector.key}
+          value={sector.value}
+          disabled={sector.disabled}
+          style={{ marginLeft: `${sector.level * 20}px` }}
+        >
           {sector.description}
         </option>
       ))}
