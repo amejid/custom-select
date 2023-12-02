@@ -1,34 +1,32 @@
 import supabase from "@/services/supabase.js";
 
 export const getSectors = async () => {
-  const topLevelSectors = await fetchSectors(null);
-  return { sectors: topLevelSectors };
+  const { data: rawSectors } = await supabase.from("sectors").select("*");
+  const sectors = organizeSectors(rawSectors);
+
+  return { sectors };
 };
 
-const fetchSectors = async (parentId) => {
-  let supabaseQuery = supabase
-    .from("sectors")
-    .select("id, value, description, parent");
+const organizeSectors = (sectors) => {
+  const topParents = sectors
+    .filter((item) => item.parent === null)
+    .map((item) => ({ ...item, children: [] }));
 
-  if (parentId === null) {
-    supabaseQuery = supabaseQuery.is("parent", parentId);
-  } else {
-    supabaseQuery = supabaseQuery.eq("parent", parentId);
+  const sortedData = sectors
+    .filter((item) => item.parent !== null)
+    .sort((a, b) => b.parent - a.parent)
+    .map((item) => ({ ...item, children: [] }));
+
+  const result = [...sortedData, ...topParents];
+
+  for (const child of sortedData) {
+    const resultIndex = result.findIndex(
+      (parent) => parent.id === child.parent,
+    );
+    const itemIndex = result.findIndex((item) => item.id === child.id);
+    result[resultIndex].children.push(result[itemIndex]);
+    result.splice(itemIndex, 1);
   }
 
-  const { data: sectors, error } = await supabaseQuery.order("value", {
-    ascending: true,
-  });
-
-  if (error) {
-    console.error(error);
-    return [];
-  }
-
-  return await Promise.all(
-    sectors.map(async (sector) => {
-      const children = await fetchSectors(sector.id);
-      return { ...sector, children };
-    }),
-  );
+  return result;
 };
